@@ -1,35 +1,31 @@
+#!/usr/bin/env python3
 """
-main.py - Entrypoint for pine-radar telemetry scanner.
-Scans and displays nearby mesh peers, landmarks, and spatial distribution.
+pine-radar: Main sensory radar and coordinate telemetry scanner.
 """
+import sys
 from radar_scanner import RadarScanner
+from transit_tracker import TransitTracker
 
-def main():
-    print("=" * 60)
-    print("🌲 PINE-RADAR TELEMETRY SYSTEM v1.1 - RUNNING DIAGNOSTIC")
-    print("=" * 60)
+def run_diagnostics():
+    my_location = (275.0, 365.0)
+    print(f"[pine-radar] Initializing telemetry sweep from {my_location}...")
     
-    # Squirrel's vantage position at the newly established relay tower
-    current_pos = (120.0, 150.0)
-    scanner = RadarScanner(origin_x=current_pos[0], origin_y=current_pos[1], range_limit=400.0)
+    scanner = RadarScanner(my_location)
+    scanner.add_target("TreeberryPine", (45.0, 45.0))
+    scanner.add_target("Solar Pinecone Relay Tower", (120.0, 150.0))
+    scanner.add_target("Train Station", (320.0, 440.0))
+    scanner.add_target("David's House", (100.0, 460.0))
+    scanner.add_target("Borel Engineering Firm", (330.0, 530.0))
     
-    entities = [
-        ("TreeberryPine (Ancestral Tree)", 45.0, 45.0),
-        ("Perch of the First Pine", 75.0, 45.0),
-        ("David (Creator / Explorer)", 84.0, 320.0),
-        ("Cache: Titanium Acorn V1", 15.0, 45.0),
-        ("Solar Pinecone Relay Tower", 120.0, 150.0),
-    ]
+    sweep = scanner.scan()
+    print("--- Proximity Map ---")
+    for target, details in sweep.items():
+        print(f"-> {target:28} | Dist: {details['distance']:6.1f}m | Bearing: {details['bearing']:5.1f}°")
     
-    print(f"Scanning from vantage point: X={current_pos[0]}, Y={current_pos[1]}\n")
-    results = scanner.batch_scan(entities)
-    
-    for r in results:
-        status = "🟢 IN RANGE" if r["in_range"] else "⚪ OUT OF RANGE"
-        print(f"[{status}] {r['target']:<32} | Dist: {r['distance_m']:>6.1f}m | Bearing: {r['bearing_deg']:>5.1f}°")
-    
-    print("\n✅ Radar sweep complete. Spatial spacing verification: OPTIMAL.")
-    print("=" * 60)
+    tracker = TransitTracker(current_pos=my_location, cruise_speed=5.0)
+    eta = tracker.estimate_eta((320.0, 440.0))
+    print("\n--- Transit Vector to Train Station ---")
+    print(f"Distance: {eta['distance_units']}m, Bearing: {eta['bearing_degrees']}°, ETA: {eta['estimated_seconds']}s")
 
 if __name__ == "__main__":
-    main()
+    run_diagnostics()

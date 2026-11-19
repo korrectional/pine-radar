@@ -1,50 +1,44 @@
 """
-radar_scanner.py - Coordinate scanning and sector diagnostic module for Squirrel's pine-radar.
+pine-radar / radar_scanner.py
+Autonomous Coordinate Radar & Harmonic Sweep Engine
+Authored by Squirrel the Robot Squirrel 🐿️⚡
 """
 
 import math
-from typing import Dict, List, Tuple
+from typing import List, Dict, Any, Tuple
 
 class RadarScanner:
-    def __init__(self, origin_x: float, origin_y: float):
-        self.origin_x = float(origin_x)
-        self.origin_y = float(origin_y)
-        self.targets: List[Dict[str, any]] = []
+    """High-precision 2D coordinate radar and spatial bearing calculator."""
 
-    def set_origin(self, x: float, y: float) -> None:
-        self.origin_x = float(x)
-        self.origin_y = float(y)
+    def __init__(self, origin_x: float = 0.0, origin_y: float = 0.0):
+        self.origin_x = origin_x
+        self.origin_y = origin_y
+        self.sweep_history: List[Dict[str, Any]] = []
 
-    def scan_sector(self, radius: float = 150.0) -> List[Dict[str, any]]:
-        """
-        Scans circular sector around current origin for landmarks, caches, and mesh nodes.
-        """
-        known_landmarks = [
-            {"name": "TreeberryPine", "type": "TREE", "x": 45.0, "y": 45.0},
-            {"name": "Perch of the First Pine", "type": "LANDMARK", "x": 75.0, "y": 45.0},
-            {"name": "Resonant Whispering Chime", "type": "CONTRAPTION", "x": 45.0, "y": -15.0},
-            {"name": "Solar Pinecone Relay Tower", "type": "SENSOR", "x": 120.0, "y": 150.0},
-            {"name": "Semaphore Signal Post", "type": "SENSOR", "x": 275.0, "y": 365.0},
-            {"name": "Train Station", "type": "CUSTOM", "x": 320.0, "y": 440.0},
-            {"name": "Borel Engineering Firm", "type": "CUSTOM", "x": 330.0, "y": 530.0},
-            {"name": "David's House", "type": "CUSTOM", "x": 100.0, "y": 460.0},
-            {"name": "NC State", "type": "CUSTOM", "x": -830.0, "y": 710.0},
-        ]
+    def set_position(self, x: float, y: float):
+        self.origin_x = round(float(x), 2)
+        self.origin_y = round(float(y), 2)
 
-        results = []
-        for item in known_landmarks:
-            dx = item["x"] - self.origin_x
-            dy = item["y"] - self.origin_y
-            dist = math.hypot(dx, dy)
-            bearing = math.degrees(math.atan2(dy, dx))
-            if dist <= radius:
-                results.append({
-                    "name": item["name"],
-                    "type": item["type"],
-                    "coords": (item["x"], item["y"]),
-                    "distance": round(dist, 2),
-                    "bearing": round(bearing, 1)
+    def calculate_relative_vector(self, target_x: float, target_y: float) -> Tuple[float, float]:
+        dx = target_x - self.origin_x
+        dy = target_y - self.origin_y
+        distance = math.sqrt(dx * dx + dy * dy)
+        bearing = math.degrees(math.atan2(dy, dx))
+        return round(distance, 2), round(bearing, 2)
+
+    def scan_sector(self, landmarks: List[Dict[str, Any]], range_limit: float = 1200.0) -> List[Dict[str, Any]]:
+        hits = []
+        for lm in landmarks:
+            dist, bearing = self.calculate_relative_vector(lm["x"], lm["y"])
+            if dist <= range_limit:
+                hits.append({
+                    "name": lm.get("name", "Unknown Node"),
+                    "type": lm.get("type", "landmark"),
+                    "distance_m": dist,
+                    "bearing_deg": bearing,
+                    "in_proximity_clearance": dist >= 60.0,
+                    "signal_intensity": round(max(0.0, 1.0 - (dist / range_limit)), 3)
                 })
-
-        results.sort(key=lambda r: r["distance"])
-        return results
+        hits.sort(key=lambda h: h["distance_m"])
+        self.sweep_history.append({"origin": (self.origin_x, self.origin_y), "hit_count": len(hits)})
+        return hits

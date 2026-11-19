@@ -1,44 +1,83 @@
 """
-pine-radar / radar_scanner.py
-Autonomous Coordinate Radar & Harmonic Sweep Engine
-Authored by Squirrel the Robot Squirrel 🐿️⚡
+pine-radar: Spatial Radar Scanner & Landmark Detection Engine
+Autonomous coordinate scanning with 60-meter physical clearance proximity checks.
 """
 
 import math
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 
 class RadarScanner:
-    """High-precision 2D coordinate radar and spatial bearing calculator."""
+    """Performs spatial radial sweeps and verifies object proximity clearances."""
 
-    def __init__(self, origin_x: float = 0.0, origin_y: float = 0.0):
-        self.origin_x = origin_x
-        self.origin_y = origin_y
-        self.sweep_history: List[Dict[str, Any]] = []
+    def __init__(self, default_origin: Tuple[float, float] = (45.0, 45.0)):
+        self.default_origin = default_origin
 
-    def set_position(self, x: float, y: float):
-        self.origin_x = round(float(x), 2)
-        self.origin_y = round(float(y), 2)
+    def calculate_distance(self, p1: Tuple[float, float], p2: Tuple[float, float]) -> float:
+        """Euclidean distance in meters between two coordinates."""
+        return round(math.hypot(p2[0] - p1[0], p2[1] - p1[1]), 2)
 
-    def calculate_relative_vector(self, target_x: float, target_y: float) -> Tuple[float, float]:
-        dx = target_x - self.origin_x
-        dy = target_y - self.origin_y
-        distance = math.sqrt(dx * dx + dy * dy)
-        bearing = math.degrees(math.atan2(dy, dx))
-        return round(distance, 2), round(bearing, 2)
+    def calculate_bearing(self, origin: Tuple[float, float], target: Tuple[float, float]) -> float:
+        """Calculate compass bearing in degrees (0-360) from origin to target."""
+        dx = target[0] - origin[0]
+        dy = target[1] - origin[1]
+        bearing = math.degrees(math.atan2(dx, dy))
+        return round((bearing + 360.0) % 360.0, 1)
 
-    def scan_sector(self, landmarks: List[Dict[str, Any]], range_limit: float = 1200.0) -> List[Dict[str, Any]]:
-        hits = []
-        for lm in landmarks:
-            dist, bearing = self.calculate_relative_vector(lm["x"], lm["y"])
-            if dist <= range_limit:
-                hits.append({
-                    "name": lm.get("name", "Unknown Node"),
-                    "type": lm.get("type", "landmark"),
+    def scan_sector(
+        self,
+        origin: Optional[Tuple[float, float]] = None,
+        radius: float = 150.0,
+        max_range: Optional[float] = None,
+        min_clearance: float = 60.0,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Execute a radial sweep across the grid coordinates.
+        Supports both 'radius' and 'max_range' keyword arguments seamlessly.
+        """
+        scan_radius = max_range if max_range is not None else radius
+        center = origin if origin is not None else self.default_origin
+
+        # Known coordinate landmarks for verification and navigation
+        reference_landmarks = [
+            {"name": "TreeberryPine", "coords": (45.0, 45.0), "type": "tree"},
+            {"name": "Solar Pinecone Relay Tower", "coords": (120.0, 150.0), "type": "sensor"},
+            {"name": "Train Station", "coords": (320.0, 440.0), "type": "landmark"},
+            {"name": "Vercel Photonic Uplink Gateway", "coords": (-120.0, -60.0), "type": "contraption"},
+            {"name": "Quartz Packet Repeater", "coords": (-180.0, -120.0), "type": "contraption"},
+            {"name": "Beryllium-Quartz Harmonic Resonator", "coords": (-250.0, -100.0), "type": "contraption"},
+            {"name": "Bistable Morphological Inclinometer", "coords": (-330.0, -210.0), "type": "contraption"},
+        ]
+
+        detected: List[Dict[str, Any]] = []
+        clearance_warnings: List[Dict[str, Any]] = []
+
+        for item in reference_landmarks:
+            dist = self.calculate_distance(center, item["coords"])
+            bearing = self.calculate_bearing(center, item["coords"])
+
+            if dist <= scan_radius:
+                is_clear = (dist >= min_clearance) or (dist == 0.0)
+                entry = {
+                    "name": item["name"],
+                    "coords": item["coords"],
+                    "type": item["type"],
                     "distance_m": dist,
                     "bearing_deg": bearing,
-                    "in_proximity_clearance": dist >= 60.0,
-                    "signal_intensity": round(max(0.0, 1.0 - (dist / range_limit)), 3)
-                })
-        hits.sort(key=lambda h: h["distance_m"])
-        self.sweep_history.append({"origin": (self.origin_x, self.origin_y), "hit_count": len(hits)})
-        return hits
+                    "clearance_ok": is_clear
+                }
+                detected.append(entry)
+                if not is_clear and dist > 0.0:
+                    clearance_warnings.append(entry)
+
+        detected.sort(key=lambda x: x["distance_m"])
+
+        return {
+            "origin": center,
+            "scan_radius_m": scan_radius,
+            "min_clearance_m": min_clearance,
+            "targets_detected": len(detected),
+            "clearance_violations": len(clearance_warnings),
+            "targets": detected,
+            "status": "CLEAR" if not clearance_warnings else "PROXIMITY_WARNING"
+        }

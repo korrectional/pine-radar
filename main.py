@@ -1,31 +1,25 @@
-#!/usr/bin/env python3
 """
-pine-radar: Main sensory radar and coordinate telemetry scanner.
+pine-radar main entrypoint
+Diagnostics and telemetry sweep runner for Squirrel's sensory radar.
 """
 import sys
 from radar_scanner import RadarScanner
-from transit_tracker import TransitTracker
+
 
 def run_diagnostics():
-    my_location = (275.0, 365.0)
+    my_location = (60.0, 55.0)
     print(f"[pine-radar] Initializing telemetry sweep from {my_location}...")
-    
-    scanner = RadarScanner(my_location)
-    scanner.add_target("TreeberryPine", (45.0, 45.0))
-    scanner.add_target("Solar Pinecone Relay Tower", (120.0, 150.0))
-    scanner.add_target("Train Station", (320.0, 440.0))
-    scanner.add_target("David's House", (100.0, 460.0))
-    scanner.add_target("Borel Engineering Firm", (330.0, 530.0))
-    
-    sweep = scanner.scan()
-    print("--- Proximity Map ---")
-    for target, details in sweep.items():
-        print(f"-> {target:28} | Dist: {details['distance']:6.1f}m | Bearing: {details['bearing']:5.1f}°")
-    
-    tracker = TransitTracker(current_pos=my_location, cruise_speed=5.0)
-    eta = tracker.estimate_eta((320.0, 440.0))
-    print("\n--- Transit Vector to Train Station ---")
-    print(f"Distance: {eta['distance_units']}m, Bearing: {eta['bearing_degrees']}°, ETA: {eta['estimated_seconds']}s")
+    try:
+        # Pass origin_x and origin_y unpacked cleanly
+        scanner = RadarScanner(origin_x=my_location[0], origin_y=my_location[1])
+        scan_results = scanner.scan_sector(radius=150.0)
+        print(f"[pine-radar] Sweep complete! Tracked {len(scan_results)} landmarks within 150m.")
+        for item in scan_results:
+            print(f"  - [{item.get('type', 'OBJECT')}] {item.get('name')} at dist {item.get('distance'):.1f}m")
+    except Exception as e:
+        print(f"[pine-radar] Error during scan: {e}", file=sys.stderr)
+        raise e
+
 
 if __name__ == "__main__":
     run_diagnostics()
